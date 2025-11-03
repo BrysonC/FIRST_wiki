@@ -7,6 +7,6 @@
   };
 
   // Add plugin to docsify's plugin array
-  $docsify = $docsify || {};
-  $docsify.plugins = [].concat(setFirstWikiTitle, $docsify.plugins || []);
+  window.$docsify = window.$docsify || {};
+  $docsify.plugins = [setPageTitle, ...($docsify.plugins || [])];
 })();
