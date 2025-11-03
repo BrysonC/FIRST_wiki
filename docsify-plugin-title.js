@@ -1,5 +1,5 @@
 (function () {
-  var setFirstWikiTitle = function (hook, vm) {
+  var setPageTitle = function (hook, vm) {
     // Invoked on each page load after new HTML has been appended to the DOM
     hook.doneEach(function () {
       document.title = "FIRST wiki";
