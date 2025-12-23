@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>FRCountdown</title>
+	<style>
+		:root{
+			--bg-image: url('FIRST_AGE.png');
+			--bg-color: #ffffff;
+			--font-color: #000000;
+			--font-size: 96px;
+		}
+		html,body{
+			height:100%;
+			margin:0;
+		}
+		body{
+			background-image: var(--bg-image);
+			background-color: var(--bg-color);
+			background-repeat: no-repeat;
+			background-position: center center;
+			background-size: cover;
+			display:flex;
+			align-items:center;
+			justify-content:center;
+			font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+			color: var(--font-color);
+		}
+		.container{
+			text-align:center;
+			text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+			padding: 1rem;
+			-webkit-user-select: none; /* Safari */
+			user-select: none;
+		}
+		#timer{
+			position: fixed;
+			top: 50%; left: 50%;
+			transform: translate(-50%, -50%);
+			font-size: clamp(36px, var(--font-size), 200px);
+			font-weight:700;margin:0;white-space:nowrap;color:var(--font-color)
+		}
+		#teamInfo{
+			position: fixed; left:50%; transform:translateX(-50%);
+			top: calc(50% + clamp(36px, var(--font-size), 256px) * 0.6);
+			font-size: calc(clamp(24px, var(--font-size), 256px) * 0.25);
+			color:var(--font-color);opacity:0.9;margin-top:0;
+		}
+		/* settings button & panel */
+		.settings-btn{
+			position: fixed;
+			top: 12px;
+			right: 12px;
+			background: rgba(255,255,255,0.85);
+			border:1px solid #ccc;
+			padding: 8px 10px;
+			border-radius:6px;
+			cursor:pointer;
+			z-index:30;
+			font-weight:600;
+		}
+		.panel{
+			position:fixed;top:56px;right:12px;width:320px;max-width:calc(100% - 40px);
+			background:rgba(255,255,255,0.98);border:1px solid #ddd;border-radius:8px;padding:12px;box-shadow:0 6px 24px rgba(0,0,0,0.12);z-index:30;display:none
+		}
+		.panel label{display:block;margin-top:8px;font-size:13px;color:#333}
+		.panel label input[type="checkbox"]{vertical-align:middle;margin-right:6px;width:12px}
+		.panel label.checkbox-label{display:flex;align-items:center;gap:6px;margin-top:8px}
+		.panel input, .panel select{width:100%;padding:6px;margin-top:4px;border-radius:4px;border:1px solid #ccc;box-sizing:border-box}
+		.panel .row{display:flex;gap:8px}
+		.panel .row input{flex:1}
+		.controls{margin-top:10px;display:flex;gap:8px;justify-content:center}
+		.controls button{padding:8px 10px;border-radius:6px;border:1px solid #888;background:#fff;cursor:pointer}
+		.hidden{display:none}
+	</style>
+</head>
+<body>
+	<button class="settings-btn" id="settingsToggle">⚙ Settings</button>
+
+	<div class="panel" id="settingsPanel" aria-hidden="true">
+		<label>Countdown Mode</label>
+		<select id="mode">
+			<option value="duration">Duration (MM:SS)</option>
+			<option value="datetime">Countdown to Date/Time</option>
+		</select>
+
+		<div id="durationInputs">
+			<label>Duration</label>
+			<div class="row">
+				<input type="number" id="minutes" min="0" placeholder="Minutes" />
+				<input type="number" id="seconds" min="0" max="59" placeholder="Seconds" />
+			</div>
+		</div>
+
+		<div id="durationControls" class="controls hidden">
+			<button id="startPauseBtn">Start</button>
+			<button id="resetBtn">Reset</button>
+		</div>
+
+		<div id="datetimeInputs" class="hidden">
+			<label>Target date/time</label>
+			<input type="datetime-local" id="targetDatetime" />
+		</div>
+
+		<label>Display format</label>
+		<select id="displayFormat">
+			<option value="hms">H:MM:SS</option>
+			<option value="mmss">MM:SS</option>
+			<option value="hours">hours (int)</option>
+			<option value="minutes">minutes (int)</option>
+			<option value="seconds">seconds (int)</option>
+			<option value="adaptive">adaptive (units swap to show all 11505 teams)</option>
+		</select>
+
+		<label>Expiry message</label>
+		<input type="text" id="expiryMessage" placeholder="FIRST Robotics!" />
+
+		<label>Font color</label>
+		<input type="color" id="fontColor" value="#000000" />
+
+		<label>Font size (px - clamping is applied)</label>
+		<input type="number" id="fontSize" min="12" max="400" value="128" />
+
+		<label class="checkbox-label"><input type="checkbox" id="hideInactive" /> Hide inactive teams</label>
+
+		<label>Background type</label>
+		<select id="bgType">
+			<option value="image">Image</option>
+			<option value="color">Color</option>
+		</select>
+
+		<div id="bgImageInputs">
+			<label>Background image URL / path</label>
+			<input type="text" id="bgImage" placeholder="FIRST_AGE.png" />
+		</div>
+
+		<div id="bgColorInputs" class="hidden">
+			<label>Background color</label>
+			<input type="color" id="bgColor" value="#ffffff" />
+		</div>
+
+		<div class="controls">
+			<button id="defaultsBtn">Defaults</button>
+		</div>
+	</div>
+
+	<div class="container" id="main">
+		<h1 id="timer">00:00</h1>
+		<div id="teamInfo"></div>
+	</div>
+
+	<script>
+
+		const DEFAULTS = {
+			mode: 'datetime',
+			minutes: 15,
+			seconds: 0,
+			targetDatetime: '2026-01-10T12:00',
+			displayFormat: 'adaptive',
+			fontColor: '#000000',
+			fontSize: 128,
+			bgType: 'image',
+			bgImage: 'FIRST_AGE.png',
+			bgColor: '#ffffff',
+			expiryMessage: 'FIRST Robotics!',
+			hideInactive: false
+		};
+
+		let settings = Object.assign({}, DEFAULTS);
+		let running = false;
+		let targetTime = null;
+		let tickInterval = null;
+		let teams = {};
+
+		// element refs
+		const el = id => document.getElementById(id);
+		const settingsToggle = el('settingsToggle');
+		const panel = el('settingsPanel');
+		const modeEl = el('mode');
+		const minutesEl = el('minutes');
+		const secondsEl = el('seconds');
+		const datetimeEl = el('targetDatetime');
+		const displayFormatEl = el('displayFormat');
+		const fontColorEl = el('fontColor');
+		const fontSizeEl = el('fontSize');
+		const expiryEl = el('expiryMessage');
+		const hideInactiveEl = el('hideInactive');
+		const bgTypeEl = el('bgType');
+		const bgImageEl = el('bgImage');
+		const bgColorEl = el('bgColor');
+		const bgImageInputs = el('bgImageInputs');
+		const bgColorInputs = el('bgColorInputs');
+		const durationInputs = el('durationInputs');
+		const datetimeInputs = el('datetimeInputs');
+		const startPauseBtn = el('startPauseBtn');
+		const resetBtn = el('resetBtn');
+		const defaultsBtn = el('defaultsBtn');
+		const durationControls = el('durationControls');
+		const timerEl = el('timer');
+		const teamInfoEl = el('teamInfo');
+
+		// Persist/load settings
+		function saveSettings(){ localStorage.setItem('frcd_settings', JSON.stringify(settings)); }
+		function loadSettings(){
+			const s = localStorage.getItem('frcd_settings');
+			if(s) { try { Object.assign(settings, JSON.parse(s)); } catch(_){} }
+		}
+
+		// Visuals
+		function applyVisualSettings(){
+			document.documentElement.style.setProperty('--font-color', settings.fontColor);
+			document.documentElement.style.setProperty('--font-size', settings.fontSize + 'px');
+			if(settings.bgType === 'image'){
+				document.documentElement.style.setProperty('--bg-image', `url('${settings.bgImage}')`);
+				document.documentElement.style.setProperty('--bg-color', settings.bgColor || '#ffffff');
+				bgImageInputs.classList.remove('hidden'); bgColorInputs.classList.add('hidden');
+			} else {
+				document.documentElement.style.setProperty('--bg-image','none');
+				document.documentElement.style.setProperty('--bg-color', settings.bgColor || '#ffffff');
+				bgImageInputs.classList.add('hidden'); bgColorInputs.classList.remove('hidden');
+			}
+		}
+
+		// CSV loader (simple robust parser)
+		async function loadTeams(){
+			try {
+				const r = await fetch('FRC_teams_updated.csv', {cache: 'no-store'});
+				if(!r.ok) throw new Error('fetch failed');
+				const txt = await r.text();
+				const lines = txt.split(/\r?\n/).filter(Boolean);
+				if(!lines.length) { teams = {}; return; }
+				const header = parseCsvLine(lines[0]).map(h => h.trim());
+				teams = {};
+				for(let i=1;i<lines.length;i++){
+					const cols = parseCsvLine(lines[i]);
+					if(!cols.length) continue;
+					const row = {};
+					for(let j=0;j<cols.length && j<header.length;j++) row[header[j]] = cols[j].trim();
+					const num = String(row['Team Number'] || row['TeamNumber'] || '').trim();
+					if(!num) continue;
+					const activeRaw = String(row['2026'] || '').trim().toLowerCase();
+					const active = ['true','1','yes'].includes(activeRaw);
+					teams[num] = {
+						name: row['Team Name'] || row['TeamName'] || '',
+						location: row['Location'] || '',
+						active
+					};
+				}
+			} catch(e){
+				console.warn('Could not load teams CSV', e);
+				teams = {};
+			}
+		}
+		function parseCsvLine(line){
+			const out = []; let cur='', inQ=false;
+			for(let i=0;i<line.length;i++){
+				const ch = line[i];
+				if(ch === '"' ){
+					if(inQ && line[i+1] === '"'){ cur += '"'; i++; }
+					else inQ = !inQ;
+				} else if(ch === ',' && !inQ){ out.push(cur); cur=''; }
+				else cur += ch;
+			}
+			out.push(cur);
+			return out;
+		}
+
+		// Timer helpers
+		function nowSec(){ return Math.floor(Date.now()/1000); }
+		function startTimer(){
+			if(running) return;
+			if(settings.mode === 'duration'){
+				const dur = (Number(settings.minutes)||0)*60 + (Number(settings.seconds)||0);
+				targetTime = Date.now() + Math.max(0, dur*1000);
+			} else {
+				if(!settings.targetDatetime) return;
+				targetTime = new Date(settings.targetDatetime).getTime();
+			}
+			running = true; startPauseBtn.textContent = 'Pause';
+			tick(); tickInterval = setInterval(tick, 200);
+		}
+		// cannot pause datetime mode
+		function pauseTimer(){
+			if(settings.mode === 'datetime') return;
+			if(!running) return;
+			running = false; startPauseBtn.textContent = 'Start'; clearInterval(tickInterval);
+		}
+		function tick(){
+			if(typeof targetTime !== 'number'){ updateDisplay(0); return; }
+			const remainingMs = targetTime - Date.now();
+			if(remainingMs <= 0){ pauseTimer(); timerEl.textContent = settings.expiryMessage; teamInfoEl.textContent = ''; return; }
+			const remainingSec = Math.ceil(remainingMs/1000);
+			updateDisplay(remainingSec);
+		}
+
+		// Formatting & display
+		function formatMMSS(totalSec){ const m=Math.floor(totalSec/60), s=totalSec%60; return `${String(m).padStart(1,'0')}:${String(s).padStart(2,'0')}`; }
+		function formatHMS(totalSec){ const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60; return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
+
+		function updateDisplay(totalSec){
+			if(totalSec <= 0){ timerEl.textContent = settings.expiryMessage; teamInfoEl.textContent = ''; return; }
+			let out = '';
+			if(settings.displayFormat === 'mmss') out = formatMMSS(totalSec);
+			else if(settings.displayFormat === 'hms') out = formatHMS(totalSec);
+			else if(settings.displayFormat === 'hours') out = `${Math.floor(totalSec/3600)} hr`;
+			else if(settings.displayFormat === 'minutes') out = `${Math.floor(totalSec/60)} min`;
+			else if(settings.displayFormat === 'adaptive'){
+				if(totalSec > 11505*60) out = `${Math.floor(totalSec/3600)} hr`;
+				else if(totalSec > 11505) out = `${Math.floor(totalSec/60)} min`;
+				else out = `${totalSec} s`;
+			} else out = `${totalSec} s`;
+			timerEl.textContent = out;
+
+			// team lookup key logic
+			let key = '';
+			if(settings.displayFormat === 'mmss'){ const m=Math.floor(totalSec/60), s=totalSec%60; key = `${m}${String(s).padStart(2,'0')}`; }
+			else if(settings.displayFormat === 'hms'){ const h=Math.floor(totalSec/3600), m=Math.floor((totalSec%3600)/60), s=totalSec%60; key = `${h}${String(m).padStart(2,'0')}${String(s).padStart(2,'0')}`; }
+			else if(settings.displayFormat === 'hours') key = `${Math.floor(totalSec/3600)}`;
+			else if(settings.displayFormat === 'minutes') key = `${Math.floor(totalSec/60)}`;
+			else if(settings.displayFormat === 'adaptive'){
+				if(totalSec > 11505*60) key = `${Math.floor(totalSec/3600)}`;
+				else if(totalSec > 11505) key = `${Math.floor(totalSec/60)}`;
+				else key = `${totalSec}`;
+			} else key = `${totalSec}`;
+
+			const t = teams[key];
+			teamInfoEl.textContent = '';
+			if(t){
+				if(settings.hideInactive && !t.active) return;
+				const node = document.createElement(t.active ? 'strong' : 'em');
+				node.textContent = `${t.name} — ${t.location}`;
+				teamInfoEl.appendChild(node);
+			}
+		}
+
+		// Helpers for immediate application
+		function getRemainingForSettings(){
+			if(running && typeof targetTime === 'number') return Math.max(0, Math.ceil((targetTime - Date.now())/1000));
+			if(settings.mode === 'duration') return (Number(settings.minutes)||0)*60 + (Number(settings.seconds)||0);
+			if(settings.targetDatetime) return Math.max(0, Math.floor((new Date(settings.targetDatetime).getTime() - Date.now())/1000));
+			return 0;
+		}
+		function saveAndApply(){
+			saveSettings(); applyVisualSettings();
+			if(settings.mode === 'duration'){
+				const dur = (Number(settings.minutes)||0)*60 + (Number(settings.seconds)||0);
+				if(running) targetTime = Date.now() + Math.max(0, dur*1000);
+				updateDisplay(dur);
+			} else {
+				if(settings.targetDatetime) targetTime = new Date(settings.targetDatetime).getTime();
+				updateDisplay(getRemainingForSettings());
+				startTimer(); // ensure datetime always running
+			}
+		}
+
+		// UI wiring
+		settingsToggle.addEventListener('click', ()=>{ const show = panel.style.display !== 'block'; panel.style.display = show ? 'block' : 'none'; panel.setAttribute('aria-hidden', show ? 'false' : 'true'); });
+
+		// mode & background toggles
+		modeEl.addEventListener('change', e => {
+			settings.mode = e.target.value;
+			if(settings.mode === 'duration'){ durationInputs.classList.remove('hidden'); datetimeInputs.classList.add('hidden'); durationControls.classList.remove('hidden'); }
+			else { durationInputs.classList.add('hidden'); datetimeInputs.classList.remove('hidden'); durationControls.classList.add('hidden'); }
+			saveAndApply();
+			if(settings.mode === 'duration'){ pauseTimer(); startPauseBtn.textContent = 'Start'; }
+		});
+		bgTypeEl.addEventListener('change', e => { settings.bgType = e.target.value; saveAndApply(); });
+
+		// immediate inputs
+		minutesEl.addEventListener('input', e => { settings.minutes = Number(e.target.value) || 0; saveAndApply(); });
+		secondsEl.addEventListener('input', e => { settings.seconds = Number(e.target.value) || 0; saveAndApply(); });
+		datetimeEl.addEventListener('change', e => { settings.targetDatetime = e.target.value || null; saveAndApply(); });
+		displayFormatEl.addEventListener('change', e => { settings.displayFormat = e.target.value; saveAndApply(); });
+		fontColorEl.addEventListener('input', e => { settings.fontColor = e.target.value; saveAndApply(); });
+		fontSizeEl.addEventListener('input', e => { settings.fontSize = Number(e.target.value) || settings.fontSize; saveAndApply(); });
+		bgImageEl.addEventListener('input', e => { settings.bgImage = e.target.value || DEFAULTS.bgImage; saveAndApply(); });
+		bgColorEl.addEventListener('input', e => { settings.bgColor = e.target.value || DEFAULTS.bgColor; saveAndApply(); });
+		expiryEl.addEventListener('input', e => { settings.expiryMessage = e.target.value || DEFAULTS.expiryMessage; saveAndApply(); });
+		hideInactiveEl.addEventListener('change', e => { settings.hideInactive = e.target.checked; saveAndApply(); });
+
+		// start/pause/reset/defaults
+		startPauseBtn.addEventListener('click', ()=>{
+			if(settings.mode !== 'duration') return;
+			if(running) pauseTimer(); else startTimer();
+			saveSettings();
+		});
+		resetBtn.addEventListener('click', ()=>{ if(settings.mode !== 'duration') return; pauseTimer(); const dur=(Number(settings.minutes)||0)*60+(Number(settings.seconds)||0); targetTime = Date.now()+Math.max(0,dur*1000); updateDisplay(dur); });
+		defaultsBtn.addEventListener('click', ()=>{
+			// restore defaults into settings and update UI controls
+			Object.assign(settings, DEFAULTS);
+			modeEl.value = settings.mode;
+			minutesEl.value = settings.minutes;
+			secondsEl.value = settings.seconds;
+			datetimeEl.value = settings.targetDatetime || '';
+			displayFormatEl.value = settings.displayFormat;
+			fontColorEl.value = settings.fontColor;
+			fontSizeEl.value = settings.fontSize;
+			bgTypeEl.value = settings.bgType;
+			bgImageEl.value = settings.bgImage;
+			bgColorEl.value = settings.bgColor;
+			expiryEl.value = settings.expiryMessage;
+			hideInactiveEl.checked = settings.hideInactive;
+			// update panel visibility
+			if(settings.mode === 'duration'){
+				durationInputs.classList.remove('hidden');
+				datetimeInputs.classList.add('hidden');
+				durationControls.classList.remove('hidden');
+			}else{
+				durationInputs.classList.add('hidden');
+				datetimeInputs.classList.remove('hidden');
+				durationControls.classList.add('hidden');
+			}
+			// stop any running timer immediately and reset state
+			if(tickInterval){ clearInterval(tickInterval); tickInterval = null; }
+			running = false;
+			startPauseBtn.textContent = 'Start';
+			// persist and apply visuals
+			applyVisualSettings();
+			saveSettings();
+			// start only if defaults require datetime mode (datetime mode must always run)
+			if(settings.mode === 'datetime'){
+				startTimer();
+			}
+			// refresh display to show defaults
+			updateDisplay(getRemainingForSettings());
+		});
+
+		// init
+		(function init(){
+			loadSettings();
+			// populate UI
+			modeEl.value = settings.mode;
+			minutesEl.value = settings.minutes;
+			secondsEl.value = settings.seconds;
+			datetimeEl.value = settings.targetDatetime || '';
+			displayFormatEl.value = settings.displayFormat;
+			fontColorEl.value = settings.fontColor;
+			fontSizeEl.value = settings.fontSize;
+			bgTypeEl.value = settings.bgType;
+			bgImageEl.value = settings.bgImage;
+			bgColorEl.value = settings.bgColor;
+			expiryEl.value = settings.expiryMessage;
+			hideInactiveEl.checked = settings.hideInactive;
+			// panel visibility
+			if(settings.mode === 'duration'){ durationInputs.classList.remove('hidden'); datetimeInputs.classList.add('hidden'); durationControls.classList.remove('hidden'); }
+			else { durationInputs.classList.add('hidden'); datetimeInputs.classList.remove('hidden'); durationControls.classList.add('hidden'); }
+			applyVisualSettings();
+			loadTeams().then(()=> {
+				updateDisplay(getRemainingForSettings());
+				if(settings.mode === 'datetime') startTimer();
+			});
+		})();
+	</script>
+</body>
+</html>
