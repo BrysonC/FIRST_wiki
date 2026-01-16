@@ -101,6 +101,8 @@
 		<div id="datetimeInputs" class="hidden">
 			<label>Target date/time</label>
 			<input type="datetime-local" id="targetDatetime" />
+			<label>Timezone offset (UTC±HH:MM)</label>
+			<input type="text" id="tzOffset" placeholder="+00:00" />
 		</div>
 
 		<label>Display format</label>
@@ -156,7 +158,7 @@
 			mode: 'datetime',
 			minutes: 15,
 			seconds: 0,
-			targetDatetime: '2026-01-10T12:00',
+			targetDatetime: '2026-04-30T08:00',
 			displayFormat: 'adaptive',
 			fontColor: '#000000',
 			fontSize: 128,
@@ -164,7 +166,8 @@
 			bgImage: 'FIRST_AGE.png',
 			bgColor: '#ffffff',
 			expiryMessage: 'FIRST Robotics!',
-			hideInactive: false
+			hideInactive: false,
+			targetOffset: '-05:00'
 		};
 
 		let settings = Object.assign({}, DEFAULTS);
@@ -199,6 +202,7 @@
 		const durationControls = el('durationControls');
 		const timerEl = el('timer');
 		const teamInfoEl = el('teamInfo');
+		const tzOffsetEl = el('tzOffset');
 
 		// Persist/load settings
 		function saveSettings(){ localStorage.setItem('frcd_settings', JSON.stringify(settings)); }
@@ -268,6 +272,16 @@
 
 		// Timer helpers
 		function nowSec(){ return Math.floor(Date.now()/1000); }
+		function hasOffset(dt){
+			return /[Zz]|[+-]\d{2}:\d{2}$/.test(String(dt||''));
+		}
+		function getTargetTimestampFromSettings(){
+			if(!settings.targetDatetime) return null;
+			let dt = String(settings.targetDatetime);
+			if(hasOffset(dt)) return new Date(dt).getTime();
+			const offset = settings.targetOffset || '+00:00';
+			return new Date(dt + offset).getTime();
+		}
 		function startTimer(){
 			if(running) return;
 			if(settings.mode === 'duration'){
@@ -275,7 +289,9 @@
 				targetTime = Date.now() + Math.max(0, dur*1000);
 			} else {
 				if(!settings.targetDatetime) return;
-				targetTime = new Date(settings.targetDatetime).getTime();
+				const ts = getTargetTimestampFromSettings();
+				if(!ts) return;
+				targetTime = ts;
 			}
 			running = true; startPauseBtn.textContent = 'Pause';
 			tick(); tickInterval = setInterval(tick, 200);
@@ -338,7 +354,10 @@
 		function getRemainingForSettings(){
 			if(running && typeof targetTime === 'number') return Math.max(0, Math.ceil((targetTime - Date.now())/1000));
 			if(settings.mode === 'duration') return (Number(settings.minutes)||0)*60 + (Number(settings.seconds)||0);
-			if(settings.targetDatetime) return Math.max(0, Math.floor((new Date(settings.targetDatetime).getTime() - Date.now())/1000));
+			if(settings.targetDatetime){
+				const ts = getTargetTimestampFromSettings();
+				return ts ? Math.max(0, Math.floor((ts - Date.now())/1000)) : 0;
+			}
 			return 0;
 		}
 		function saveAndApply(){
@@ -348,7 +367,10 @@
 				if(running) targetTime = Date.now() + Math.max(0, dur*1000);
 				updateDisplay(dur);
 			} else {
-				if(settings.targetDatetime) targetTime = new Date(settings.targetDatetime).getTime();
+				if(settings.targetDatetime){
+					const ts = getTargetTimestampFromSettings();
+					if(ts) targetTime = ts;
+				}
 				updateDisplay(getRemainingForSettings());
 				startTimer(); // ensure datetime always running
 			}
@@ -378,6 +400,7 @@
 		bgColorEl.addEventListener('input', e => { settings.bgColor = e.target.value || DEFAULTS.bgColor; saveAndApply(); });
 		expiryEl.addEventListener('input', e => { settings.expiryMessage = e.target.value || DEFAULTS.expiryMessage; saveAndApply(); });
 		hideInactiveEl.addEventListener('change', e => { settings.hideInactive = e.target.checked; saveAndApply(); });
+		tzOffsetEl.addEventListener('input', e => { settings.targetOffset = e.target.value || '+00:00'; saveAndApply(); });
 
 		// start/pause/reset/defaults
 		startPauseBtn.addEventListener('click', ()=>{
@@ -401,6 +424,7 @@
 			bgColorEl.value = settings.bgColor;
 			expiryEl.value = settings.expiryMessage;
 			hideInactiveEl.checked = settings.hideInactive;
+			tzOffsetEl.value = settings.targetOffset;
 			// update panel visibility
 			if(settings.mode === 'duration'){
 				durationInputs.classList.remove('hidden');
@@ -433,7 +457,9 @@
 			modeEl.value = settings.mode;
 			minutesEl.value = settings.minutes;
 			secondsEl.value = settings.seconds;
-			datetimeEl.value = settings.targetDatetime || '';
+			// strip any trailing offset for datetime-local input (it can't accept offsets)
+			const rawDt = settings.targetDatetime || '';
+			datetimeEl.value = rawDt ? rawDt.replace(/([Zz]|[+-]\d{2}:\d{2})$/,'') : '';
 			displayFormatEl.value = settings.displayFormat;
 			fontColorEl.value = settings.fontColor;
 			fontSizeEl.value = settings.fontSize;
@@ -442,6 +468,7 @@
 			bgColorEl.value = settings.bgColor;
 			expiryEl.value = settings.expiryMessage;
 			hideInactiveEl.checked = settings.hideInactive;
+			tzOffsetEl.value = settings.targetOffset || '+00:00';
 			// panel visibility
 			if(settings.mode === 'duration'){ durationInputs.classList.remove('hidden'); datetimeInputs.classList.add('hidden'); durationControls.classList.remove('hidden'); }
 			else { durationInputs.classList.add('hidden'); datetimeInputs.classList.remove('hidden'); durationControls.classList.add('hidden'); }
